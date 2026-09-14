@@ -2420,5 +2420,19 @@
             showToast('🇩🇪 مرحباً بك في DeutschFun Pro!', 'info');
         };
     </script>
-</body>
+<script>
+(function(){
+  var originalSpeak = window.speakGerman;
+  window.speakGerman = function(text) {
+    if (typeof AndroidTTS !== 'undefined' && AndroidTTS.speak) {
+      AndroidTTS.speak(text);
+      if (typeof showToast === 'function') {
+        showToast('🔊 جاري النطق: "' + text + '"', 'info');
+      }
+      return;
+    }
+    if (originalSpeak) originalSpeak(text);
+  };
+})();
+</script></body>
 </html>
