@@ -2434,5 +2434,90 @@
     if (originalSpeak) originalSpeak(text);
   };
 })();
-</script></body>
+</script></body><!-- Welcome Splash Screen -->
+<div id="welcome-splash" class="fixed inset-0 z-[100] hidden flex-col items-center justify-center bg-gradient-to-b from-black via-red-900 to-yellow-600 text-white p-6 text-center">
+    <div class="space-y-6 max-w-sm">
+        <div class="text-6xl">🇩🇪</div>
+        <h1 class="text-3xl font-black">DeutschFun Pro</h1>
+        <p class="text-sm text-white/80">منصة تعلم اللغة الألمانية التفاعلية</p>
+        <div class="pt-6 border-t border-white/20 space-y-1">
+            <p class="text-xs text-white/60">تطوير وتصميم</p>
+            <p class="text-lg font-extrabold">يوسف</p>
+        </div>
+        <button onclick="closeWelcomeSplash()" class="mt-6 px-8 py-3 bg-white text-slate-900 font-extrabold rounded-2xl shadow-xl">ابدأ التعلم 🚀</button>
+    </div>
+</div><script>
+// محرك الأصوات والاهتزاز
+function playTone(freq, duration, type='sine') {
+    try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.type = type;
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+    } catch(e) { console.error('Audio error', e); }
+}
+function playCorrectSound() {
+    playTone(523.25, 0.15);
+    setTimeout(() => playTone(783.99, 0.2), 100);
+}
+function playWrongSound() {
+    playTone(200, 0.3, 'sawtooth');
+}
+function vibrateDevice(pattern = 50) {
+    if (navigator.vibrate) navigator.vibrate(pattern);
+}
+
+// شاشة الترحيب
+function showWelcomeSplashIfNeeded() {
+    if (!localStorage.getItem('deutschfun_welcome_seen')) {
+        const splash = document.getElementById('welcome-splash');
+        if (splash) {
+            splash.classList.remove('hidden');
+            splash.classList.add('flex');
+        }
+    }
+}
+function closeWelcomeSplash() {
+    localStorage.setItem('deutschfun_welcome_seen', 'true');
+    const splash = document.getElementById('welcome-splash');
+    splash.classList.add('hidden');
+    splash.classList.remove('flex');
+    vibrateDevice(30);
+}
+
+// إعادة تعريف دالة التحقق من التمارين لإضافة الصوت والاهتزاز
+function checkMiniExercise(btn, isCorrect, explain) {
+    const container = btn.closest('.space-y-3');
+    const feedback = container.querySelector('.ex-feedback');
+    container.querySelectorAll('button').forEach(b => b.classList.remove('bg-emerald-500', 'bg-red-500', 'text-white'));
+    feedback.classList.remove('hidden', 'bg-emerald-500/10', 'text-emerald-600', 'bg-red-500/10', 'text-red-600');
+
+    if (isCorrect) {
+        btn.classList.add('bg-emerald-600', 'text-white');
+        feedback.classList.add('bg-emerald-500/10', 'text-emerald-600', 'border', 'border-emerald-500/20');
+        feedback.innerHTML = `✅ إجابة صحيحة! ${explain}`;
+        addXP(10);
+        playCorrectSound();
+        vibrateDevice(50);
+    } else {
+        btn.classList.add('bg-red-600', 'text-white');
+        feedback.classList.add('bg-red-500/10', 'text-red-600', 'border', 'border-red-500/20');
+        feedback.innerHTML = `❌ إجابة خاطئة! ${explain}`;
+        playWrongSound();
+        vibrateDevice([50,50,50]);
+    }
+}
+
+// تشغيل شاشة الترحيب دون التأثير على تحميل التطبيق الأصلي
+window.addEventListener('load', function() {
+    showWelcomeSplashIfNeeded();
+});
+    </script>
 </html>
