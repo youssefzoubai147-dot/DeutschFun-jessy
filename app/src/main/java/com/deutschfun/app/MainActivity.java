@@ -25,6 +25,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     private static final int REQ_RECORD_AUDIO = 101;
 
     @Override public void onCreate(Bundle savedInstanceState) {
+        setTheme(R.style.AppTheme);
         super.onCreate(savedInstanceState);
         Window w = getWindow();
         w.setStatusBarColor(Color.rgb(15,23,42));
@@ -35,6 +36,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
 
         webView = new WebView(this);
         setContentView(webView);
+
         WebSettings s = webView.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
@@ -45,20 +47,28 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         s.setDisplayZoomControls(false);
         s.setLoadWithOverviewMode(false);
         s.setUseWideViewPort(false);
-        webView.addJavascriptInterface(new AndroidTTS(), "AndroidTTS");
-        webView.addJavascriptInterface(new AndroidSTT(), "AndroidSTT");
+
+        webView.addJavascriptInterface(new WebAppInterface(), "AndroidTTS");
+        webView.addJavascriptInterface(new WebAppInterface(), "AndroidSTT");
+
         webView.setWebViewClient(new WebViewClient());
         webView.loadUrl("file:///android_asset/index.html");
     }
 
+    // ----------------- محرك النطق (Text To Speech) -----------------
     @Override
     public void onInit(int status) {
-        if (status == TextToSpeech.SUCCESS) {
+        if (status == TextToSpeech.SUCCESS && tts != null) {
             tts.setLanguage(Locale.GERMANY);
+            tts.setSpeechRate(0.9f);
         }
     }
 
+    // ----------------- محرك التعرف على الصوت (Speech To Text) -----------------
     private void setupSpeechRecognizer() {
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            return;
+        }
         speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this);
         speechRecognizer.setRecognitionListener(new RecognitionListener() {
             @Override public void onReadyForSpeech(Bundle params) {}
@@ -68,24 +78,16 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             @Override public void onEndOfSpeech() {}
 
             @Override public void onError(int error) {
-                runOnUiThread(() -> {
-                    if (webView != null) {
-                        webView.evaluateJavascript(
-                            "window.onSpeechError && window.onSpeechError(" + error + ");", null);
-                    }
-                });
+                sendSpeechErrorToWeb(error);
             }
 
             @Override public void onResults(Bundle results) {
                 ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-                String text = (matches != null && !matches.isEmpty()) ? matches.get(0) : "";
-                String escaped = text.replace("\\\\", "\\\\\\\\").replace("'", "\\\\'");
-                runOnUiThread(() -> {
-                    if (webView != null) {
-                        webView.evaluateJavascript(
-                            "window.onSpeechResult && window.onSpeechResult('" + escaped + "');", null);
-                    }
-                });
+                if (matches != null && !matches.isEmpty()) {
+                    sendSpeechResultToWeb(matches.get(0));
+                } else {
+                    sendSpeechErrorToWeb(-1);
+                }
             }
 
             @Override public void onPartialResults(Bundle partialResults) {}
@@ -93,60 +95,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         });
     }
 
-    private void actuallyStartListening() {
-        Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "de-DE");
-        intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
-        if (speechRecognizer != null) {
-            speechRecognizer.startListening(intent);
-        }
-    }
-
-    public class AndroidTTS {
-        @JavascriptInterface
-        public void speak(String text) {
-            if (tts != null) {
-                tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "utteranceId");
-            }
-        }
-    }
-
-    public class AndroidSTT {
-        @JavascriptInterface
-        public void startListening() {
-            runOnUiThread(() -> {
-                if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                    requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQ_RECORD_AUDIO);
-                    return;
-                }
-                actuallyStartListening();
-            });
-        }
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQ_RECORD_AUDIO && grantResults.length > 0
-                && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            actuallyStartListening();
-        }
-    }
-
-    @Override public void onBackPressed() {
-        if (webView.canGoBack()) webView.goBack(); else super.onBackPressed();
-    }
-
-    @Override
-    protected void onDestroy() {
-        if (tts != null) {
-            tts.stop();
-            tts.shutdown();
-        }
-        if (speechRecognizer != null) {
-            speechRecognizer.destroy();
-        }
-        super.onDestroy();
-    }
-}
+    private void sendSpeechResultToWeb(final String recognizedText) {
+        runOnUiThread(new Runnable() {
+            @Override public void run() {
+                if (webView != null
